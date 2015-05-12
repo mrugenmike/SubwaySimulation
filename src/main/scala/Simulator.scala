@@ -1,4 +1,4 @@
-package stockapp
+package simulation
 
 
 import java.util.Random
@@ -43,7 +43,7 @@ class Staff extends Actor{
 class Customer extends Actor{
   val stream: EventStream = context.system.eventStream
   val orderPref = Array("Salad","Sub")
-  val random = new Random()
+  val random = scala.util.Random
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
@@ -58,7 +58,8 @@ class Customer extends Actor{
 
     case OrderPreference(msg,from)=>{
       println("staff=> %s".format(msg))
-      from ! TopMenuOrderPref("I would like to have Sub today",self)
+      val menuChoice: String = random.shuffle(orderPref.toList).head
+      from ! TopMenuOrderPref("I would like to have %s today".format(menuChoice),self)
     }
   }
 }
