@@ -12,7 +12,7 @@ case class OrderPreference(msg:String,from:ActorRef)
 
 //Customer messages
 case class CustomerEntersForPlacingOrder(msg:String,from:ActorRef)
-case class TopMenuOrderPref(pref:String,from:ActorRef)
+case class TopMenuOrderPref(pref:String,from:ActorRef) // pref = {Sub|Salad}
 
 //preferences
 class Staff extends Actor{
@@ -31,11 +31,11 @@ class Staff extends Actor{
 
     case CustomerEntersForPlacingOrder(msg,from)=> {
      println("Customer => %s".format(msg))
-     from!OrderPreference("Hello Sir what would you like to have Sub or Salad?",from)
+     from!OrderPreference("Hello Sir what would you like to have Sub or Salad?",self)
     }
 
     case TopMenuOrderPref(topMenu,from)=>{
-      println("Customer => %s".format(TopMenuOrderPref(topMenu,from)))
+      println("Customer => %s".format(topMenu))
     }
   }
 }
@@ -58,7 +58,7 @@ class Customer extends Actor{
 
     case OrderPreference(msg,from)=>{
       println("staff=> %s".format(msg))
-      from ! TopMenuOrderPref("Sub",self)
+      from ! TopMenuOrderPref("I would like to have Sub today",self)
     }
   }
 }
