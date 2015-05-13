@@ -38,15 +38,22 @@ case class ChooseBread(options:Seq[String]=Seq("9 Grain HoneyOats","FlatBread","
 }
 case class BreadChoice(bread:String,breadSize:String)
 
+//Random Messages
+
+case class ScanMenu(person:ActorRef)
+case class TakeACall(person:ActorRef)
+case class ExitRestaurant(person:ActorRef)
+case class MakeACall(person:ActorRef)
 
 
 class Staff extends Actor{
   val stream: EventStream = context.system.eventStream
   var currentCustomer:ActorRef = null
-  val queue = new mutable.Queue[ActorRef]()
+  val queue = new scala.collection.mutable.Queue[ActorRef]()
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
+    stream.subscribe(self,classOf[ExitRestaurant])
     stream.subscribe(self,classOf[CustomerEntersForPlacingOrder])
   }
 
@@ -58,11 +65,11 @@ class Staff extends Actor{
     case CustomerEntersForPlacingOrder(msg,from)=> {
      currentCustomer match{
        case customer:ActorRef => {
-         queue.enqueue(customer)
+         queue.enqueue(from)
          from ! WaitForYourTurnPlease(self)
        }
        case _ => { // Dont have any current Customer I will take your order
-              println("Hello Sir what would you like to have Sub or Salad? from %s".format(sender().path.name))
+              println("Staff => Hello %s what would you like to have Sub or Salad?".format(sender().path.name))
               currentCustomer = sender()
               sender()!OrderPreference()
            }
@@ -88,10 +95,15 @@ class Staff extends Actor{
     case DrinkResponse(drinkType,drinkSize) =>{
       DrinkResponse(drinkType,drinkSize).isRequested match {
         case true => {
-            sender!BillingRequest(amount =(2.00+6.50).toFloat)
+          println("Staff=> Here is your  %s cup for a drink".format(drinkSize,sender().path.name))
+          val billAmount: Float = (2.00 + 6.50).toFloat
+          sender!BillingRequest(amount =billAmount)
+          println("Staff=> %s the bill would be %s".format(sender().path.name,billAmount))
         }
         case false =>{
-            sender!BillingRequest(amount = 6.50.toFloat)
+          val billAmount: Float = 6.50.toFloat
+          sender!BillingRequest(amount = billAmount)
+          println("Staff=> %s the bill would be %s".format(billAmount,sender().path.name))
         }
       }
     }
@@ -102,18 +114,21 @@ class Staff extends Actor{
       currentCustomer = null
       queue.isEmpty match {
         case false => {
-          currentCustomer=queue.dequeue()
+          currentCustomer= queue.dequeue()
           currentCustomer!OrderPreference()
         }
         case true => //wait for next customer indefinitely
       }
-
     }
 
     case BreadChoice(bread,size)=>{
 
     }
 
+    case ExitRestaurant(from)=>{
+      val name: String = from.path.name
+      println(queue.dequeueFirst(_.path.name.equals(name)))
+    }
   }// receive ends
 }
 
@@ -122,6 +137,7 @@ class Customer extends Actor{
   val orderPref = Array("Salad","Sub")
   val random = scala.util.Random
   val drinkPref = List(true,false)
+  val customerMessages = List(ScanMenu(self),TakeACall(self),MakeACall(self),ExitRestaurant(self))
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
@@ -142,9 +158,21 @@ class Customer extends Actor{
     }
 
     case WaitForYourTurnPlease(sender) =>{
-      for(x<-Range(0,3)){
-        Thread.sleep(1000)
-        println("%s Doing some random stuff".format(self.path.name))
+      import scala.util.control.Breaks._
+      import scala.util.control._
+      val loop = new Breaks;
+
+      loop.breakable{
+        for(x<-Range(0,7)){
+          Thread.sleep(1500)
+          val message = util.Random.shuffle(customerMessages).head
+          if(!message.equals(ExitRestaurant(self))){
+            stream.publish(message)
+          }else{
+            stream.publish(ExitRestaurant(self))
+            loop.break()
+          }
+        }
       }
     }
 
@@ -179,14 +207,49 @@ class Customer extends Actor{
   } //receive ends
 }
 
+class Observer extends Actor{
+
+  @throws[Exception](classOf[Exception])
+  override def preStart(): Unit = {
+    println("%s created".format(self.path.name))
+    context.system.eventStream.subscribe(self,classOf[ExitRestaurant])
+    context.system.eventStream.subscribe(self,classOf[ScanMenu])
+    context.system.eventStream.subscribe(self,classOf[TakeACall])
+    context.system.eventStream.subscribe(self,classOf[MakeACall])
+  }
+
+  override def receive: Actor.Receive = {
+    case ExitRestaurant(customer)=>{
+      println("Observer => %s exited the restaurant ".format(customer.path.name))
+    }
+
+    case TakeACall(customer)=>{
+      println("Observer=> %s looks like is taking a call".format(customer.path.name))
+    }
+
+    case MakeACall(customer)=>{
+      println("Observer=> %s looks like is making a call".format(customer.path.name))
+    }
+
+    case ScanMenu(customer)=>{
+      println("Observer=> %s looks is Scanning a menu".format(customer.path.name))
+      for(x<-Range(1,4)){
+        Thread.sleep(800)
+        println(".........................................")
+      }
+    }
+  }
+}
+
 object SubwaySimulator {
   def main(args:Array[String]): Unit = {
     // actor system for the store initialized
     val system: ActorSystem = ActorSystem("SimulationActors")
+    val staff: ActorRef = system.actorOf(Props[Staff],"Staff")
+    val observer:ActorRef = system.actorOf(Props[Observer],"Observer")
 
     println("***** Starting Subway Simulation ********* ")
     println("Please enter the no of customers you would like to be in the store: ")
-    val staff: ActorRef = system.actorOf(Props[Staff],"FrontDeskStaff")
 
     //read from stdin
     val noOfCustomers: Int = (for(ln<-io.Source.stdin.getLines()) yield ln).toSeq.head.toInt
