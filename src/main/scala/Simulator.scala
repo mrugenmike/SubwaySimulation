@@ -168,9 +168,9 @@ class Customer extends Actor{
       sender! BillingResponse(amount,paymentMode)
     }
 
-    case ChooseBread(options)=>{
-      val bread: String = ChooseBread(options).makeBreadChoice()
-      val breadSize: String = ChooseBread(options).makeSizeChoice()
+    case ChooseBread(options,size)=>{
+      val bread: String = ChooseBread(options,size).makeBreadChoice()
+      val breadSize: String = ChooseBread(options,size).makeSizeChoice()
       println("%s I would like to have %s bread with size %s".format(self.path.name,bread,breadSize))
       sender ! BreadChoice(bread,breadSize)
     }  
