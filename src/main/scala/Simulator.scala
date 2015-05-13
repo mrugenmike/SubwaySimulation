@@ -62,9 +62,9 @@ class Staff extends Actor{
          from ! WaitForYourTurnPlease(self)
        }
        case _ => { // Dont have any current Customer I will take your order
-              println("Hello Sir what would you like to have Sub or Salad?")
-              currentCustomer = sender
-              currentCustomer!OrderPreference
+              println("Hello Sir what would you like to have Sub or Salad? from %s".format(sender().path.name))
+              currentCustomer = sender()
+              sender()!OrderPreference()
            }
        }
      }
@@ -96,12 +96,13 @@ class Staff extends Actor{
     }
 
     case BillingResponse(amount,paymentMode)=>{
+      println("Staff=> We have charged you %s by payment mode %s".format(amount,paymentMode))
       println("Staff=> Thank you for your business have a great day!")
       currentCustomer = null
       queue.isEmpty match {
         case false => {
           currentCustomer=queue.dequeue()
-          currentCustomer!OrderPreference
+          currentCustomer!OrderPreference()
         }
         case true => //wait for next customer indefinitely
       }
