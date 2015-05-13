@@ -6,6 +6,7 @@ import java.util.{Scanner, Random}
 import akka.actor._
 import akka.event.EventStream
 
+import scala.StringBuilder
 import scala.collection.mutable
 import scala.collection.parallel.immutable
 
@@ -66,7 +67,9 @@ class Staff extends Actor{
 
 // print the list
   def printList(args: Seq[_]): Unit = {
-    args.foreach(println)
+val newBuilder=new StringBuilder()
+  args.foreach(el=>{newBuilder.append(el+",")})
+  println(newBuilder.toString())
   }
 
   @throws[Exception](classOf[Exception])
@@ -241,7 +244,7 @@ class Customer extends Actor{
     case FlavourRequest(options) =>{
           Thread.sleep(2000)
           val flavour: String = util.Random.shuffle(options).head
-          println("I would like to go for %s".format(flavour))
+          println("%s=> I would like to go for %s".format(self.path.name,flavour))
           sender ! FlavourResponse(flavour)
     }
     case SauceRequest(options) =>{
@@ -249,7 +252,7 @@ class Customer extends Actor{
       val sauce1: String = util.Random.shuffle(options).head
       val sauce2: String = util.Random.shuffle(options).head
 
-      println("I would like to go for %s and %s".format(sauce1,sauce2))
+      println("%s=> I would like to go for %s and %s".format(self.path.name,sauce1,sauce2))
       sender ! SauceResponse(sauce1,sauce2)
     }
 
