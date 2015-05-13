@@ -78,7 +78,8 @@ class Staff extends Actor{
           sender() ! ChooseBread()
         }
         case false => { //salad
-           println("Here's your Salad sir, would you like to have a drink?")
+           println("Staff=>%s Here's your Salad sir, would you like to have a drink?".format(sender().path.name))
+           println("Staff=> Your Drink options are %s and sizes are %s",DrinkRequest().options,DrinkRequest().size)
            sender() ! DrinkRequest()
         }
       }
