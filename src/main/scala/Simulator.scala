@@ -20,7 +20,16 @@ case class BillingRequest(amount:Float,paymentType:Seq[String]=Seq("Cash","Card"
 
 case class DrinkRequest(options:Seq[String]=Seq("Coke","Sprite","Pepsi"),size:Seq[String]= Seq("Medium","Large","Small"))
 
+case class FlavourRequest(options:Seq[String]=Seq("Meat","Egg","Veggie"))
+
+case class SauceRequest(options:Seq[String]=Seq("Mustard","Mayonnaise","Chipotle", "Sweet Onion", "Ranch"))
+
+
+
 case class BillingResponse(amount:Float,paymentMode:String)
+case class FlavourResponse(flavor:String)
+case class SauceResponse(sauce1:String,sauce2:String)
+
 
 //Customer
 case class CustomerEntersForPlacingOrder(msg:String,from:ActorRef)
@@ -36,6 +45,10 @@ case class ChooseBread(options:Seq[String]=Seq("9 Grain HoneyOats","FlatBread","
   def makeBreadChoice():String = util.Random.shuffle(options).head
   def makeSizeChoice():String = util.Random.shuffle(size).head
 }
+
+
+
+
 case class BreadChoice(bread:String,breadSize:String)
 
 //Random Messages
@@ -50,6 +63,11 @@ class Staff extends Actor{
   val stream: EventStream = context.system.eventStream
   var currentCustomer:ActorRef = null
   val queue = new scala.collection.mutable.Queue[ActorRef]()
+
+// print the list
+  def printList(args: Seq[_]): Unit = {
+    args.foreach(println)
+  }
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
@@ -69,6 +87,7 @@ class Staff extends Actor{
          from ! WaitForYourTurnPlease(self)
        }
        case _ => { // Dont have any current Customer I will take your order
+
               println("Staff => Hello %s what would you like to have Sub or Salad?".format(sender().path.name))
               currentCustomer = sender()
               sender()!OrderPreference()
@@ -122,14 +141,40 @@ class Staff extends Actor{
     }
 
     case BreadChoice(bread,size)=>{
-
+      println("Staff=> Ok.. i will get you a %s with size %s".format(bread,size))
+      //println("Staff=> What flavour would you like..You can have %s ".format(FlavourRequest().options))
+      println("Staff=> What flavour would you like..You can have any of these..")
+      printList(FlavourRequest().options)
+      sender() ! FlavourRequest()
     }
+
+   // received flavour now ask for sauce
+    case FlavourResponse(flavour)=>{
+      println("Staff=> sure! I will get you  %s".format(flavour))
+      println("Staff=> What sauce would you like..You can have any of these..")
+      printList(SauceRequest().options)
+      sender() ! SauceRequest()
+    }
+
 
     case ExitRestaurant(from)=>{
       val name: String = from.path.name
       println(queue.dequeueFirst(_.path.name.equals(name)))
     }
-  }// receive ends
+
+
+// received sauce preference. Now ask for a drink
+  case SauceResponse(sauce1,sauce2)=>{
+    println("Staff=> sure! I will get you %s and %s".format(sauce1,sauce2))
+    println("Staff=> Would you like to have any drink? you can go for")
+    printList(DrinkRequest().options)
+    println("Staff=> for sizes ")
+    printList(DrinkRequest().size)
+    sender() ! DrinkRequest()
+  }
+}
+
+
 }
 
 class Customer extends Actor{
@@ -139,9 +184,10 @@ class Customer extends Actor{
   val drinkPref = List(true,false)
   val customerMessages = List(ScanMenu(self),TakeACall(self),MakeACall(self),ExitRestaurant(self))
 
+
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
-    println("%s created".format(self.path.name))
+    println("%s Entered".format(self.path.name))
     stream.subscribe(self,classOf[OpenForBusiness])
   }
 
@@ -152,9 +198,9 @@ class Customer extends Actor{
 
     case OrderPreference(pref)=>{
       val topChoice: String = OrderPreference(pref).getRandom
-      println("%s I would like to have %s today".format(self.path.name, topChoice))
+    println("%s I would like to have %s today".format(self.path.name, "Sub"))
       Thread.sleep(2000)
-      sender ! TopMenuOrderPref(topChoice)
+      sender ! TopMenuOrderPref("Sub")
     }
 
     case WaitForYourTurnPlease(sender) =>{
@@ -191,6 +237,22 @@ class Customer extends Actor{
         }
       }
     }
+
+    case FlavourRequest(options) =>{
+          Thread.sleep(2000)
+          val flavour: String = util.Random.shuffle(options).head
+          println("I would like to go for %s".format(flavour))
+          sender ! FlavourResponse(flavour)
+    }
+    case SauceRequest(options) =>{
+      Thread.sleep(2000)
+      val sauce1: String = util.Random.shuffle(options).head
+      val sauce2: String = util.Random.shuffle(options).head
+
+      println("I would like to go for %s and %s".format(sauce1,sauce2))
+      sender ! SauceResponse(sauce1,sauce2)
+    }
+
     
     case BillingRequest(amount,paymentType)=>{
       val paymentMode: String = util.Random.shuffle(paymentType).head
