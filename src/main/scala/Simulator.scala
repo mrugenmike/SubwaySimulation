@@ -273,14 +273,15 @@ class Customer extends Actor{
 }
 
 class Observer extends Actor{
+  val stream: EventStream = context.system.eventStream
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
-    println("%s created".format(self.path.name))
-    context.system.eventStream.subscribe(self,classOf[ExitRestaurant])
-    context.system.eventStream.subscribe(self,classOf[ScanMenu])
-    context.system.eventStream.subscribe(self,classOf[TakeACall])
-    context.system.eventStream.subscribe(self,classOf[MakeACall])
+    stream.subscribe(self,classOf[ExitRestaurant])
+    stream.subscribe(self,classOf[ScanMenu])
+    stream.subscribe(self,classOf[TakeACall])
+    stream.subscribe(self,classOf[MakeACall])
+    stream.subscribe(self,classOf[CustomerEntersForPlacingOrder])
   }
 
   override def receive: Actor.Receive = {
@@ -302,6 +303,10 @@ class Observer extends Actor{
         Thread.sleep(800)
         println(".........................................")
       }
+    }
+
+    case CustomerEntersForPlacingOrder(msg,from)=>{
+      println("Observer=> %s entered the Subway restaurant premises".format(from.path.name))
     }
   }
 }
