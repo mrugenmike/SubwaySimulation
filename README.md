@@ -1,2 +1,2 @@
-# CMPE Dept Front Desk Simulation
-Simulating the Departmental front desk simulation.
+# Subway Simulation
+Simulating the Subway restaurant workflow.
