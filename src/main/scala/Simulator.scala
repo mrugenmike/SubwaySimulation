@@ -1,23 +1,49 @@
 package simulation
 
 
-import java.util.Random
+import java.util.{Scanner, Random}
 
 import akka.actor._
 import akka.event.EventStream
 
+import scala.collection.mutable
+import scala.collection.parallel.immutable
+
 //Business message
 case class OpenForBusiness(message:String="Open for business",from:ActorRef)
-case class OrderPreference(msg:String,from:ActorRef)
+case class OrderPreference(pref:Seq[String]=Seq("Sub","Salad")){
+  def getRandom() = scala.util.Random.shuffle(pref).head
+}
+case class WaitForYourTurnPlease(from:ActorRef)
 
-//Customer messages
+case class BillingRequest(amount:Float,paymentType:Seq[String]=Seq("Cash","Card"))
+
+case class DrinkRequest(options:Seq[String]=Seq("Coke","Sprite","Pepsi"),size:Seq[String]= Seq("Medium","Large","Small"))
+
+case class BillingResponse(amount:Float,paymentMode:String)
+
+//Customer
 case class CustomerEntersForPlacingOrder(msg:String,from:ActorRef)
-case class TopMenuOrderPref(pref:String,from:ActorRef) // pref = {Sub|Salad}
+case class TopMenuOrderPref(msg:String){ // pref = {Sub|Salad}
+  def isSalad = msg.equalsIgnoreCase("salad")
+  def isSub = msg.equalsIgnoreCase("sub")
+}
+case class DrinkResponse(drink:String,size:String) {
+  def isRequested = if(drink.isEmpty||drink.isEmpty)false else true;
+}
 
-//preferences
+case class ChooseBread(options:Seq[String]=Seq("9 Grain HoneyOats","FlatBread","Italian Herb and Cheese","Italian","9 Grain wheat"),size:Seq[String]= Seq("Footlong","Regular")){
+  def makeBreadChoice():String = util.Random.shuffle(options).head
+  def makeSizeChoice():String = util.Random.shuffle(size).head
+}
+case class BreadChoice(bread:String,breadSize:String)
+
+
+
 class Staff extends Actor{
   val stream: EventStream = context.system.eventStream
-  var currentCustomer="None"
+  var currentCustomer:ActorRef = null
+  val queue = new mutable.Queue[ActorRef]()
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
@@ -30,46 +56,144 @@ class Staff extends Actor{
     }
 
     case CustomerEntersForPlacingOrder(msg,from)=> {
-     println("Customer => %s".format(msg))
-     from!OrderPreference("Hello Sir what would you like to have Sub or Salad?",self)
+     currentCustomer match{
+       case customer:ActorRef => {
+         queue.enqueue(customer)
+         from ! WaitForYourTurnPlease(self)
+       }
+       case _ => { // Dont have any current Customer I will take your order
+              println("Hello Sir what would you like to have Sub or Salad?")
+              currentCustomer = sender
+              currentCustomer!OrderPreference
+           }
+       }
+     }
+
+    case TopMenuOrderPref(topMenu)=>{
+      println("Staff=> ok lets build %s for you".format(topMenu))
+      TopMenuOrderPref(topMenu).isSub match {
+        case true =>{ //sub
+          Thread.sleep(1000)
+          // ask for bread now
+          sender() ! ChooseBread()
+        }
+        case false => { //salad
+           println("Here's your Salad sir, would you like to have a drink?")
+           Thread.sleep(1500)
+           sender ! DrinkRequest
+        }
+      }
     }
 
-    case TopMenuOrderPref(topMenu,from)=>{
-      println("Customer => %s".format(topMenu))
+    case DrinkResponse(drinkType,drinkSize) =>{
+      DrinkResponse(drinkType,drinkSize).isRequested match {
+        case true => {
+            sender!BillingRequest(amount =(2.00+6.50).toFloat)
+        }
+        case false =>{
+            sender!BillingRequest(amount = 6.50.toFloat)
+        }
+      }
     }
-  }
+
+    case BillingResponse(amount,paymentMode)=>{
+      println("Staff=> Thank you for your business have a great day!")
+      currentCustomer = null
+      queue.isEmpty match {
+        case false => {
+          currentCustomer=queue.dequeue()
+          currentCustomer!OrderPreference
+        }
+        case true => //wait for next customer indefinitely
+      }
+
+    }
+
+    case BreadChoice(bread,size)=>{
+
+    }
+
+  }// receive ends
 }
 
 class Customer extends Actor{
   val stream: EventStream = context.system.eventStream
   val orderPref = Array("Salad","Sub")
   val random = scala.util.Random
+  val drinkPref = List(true,false)
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
+    println("%s created".format(self.path.name))
     stream.subscribe(self,classOf[OpenForBusiness])
   }
 
   override def receive: Actor.Receive = {
     case OpenForBusiness(msg,from)=>{
-      println("Opening for business now")
-      from!CustomerEntersForPlacingOrder("Hello how are you today!",self)
+      from!CustomerEntersForPlacingOrder("%s -> Hello how are you today!".format(self.path.name),self)
     }
 
-    case OrderPreference(msg,from)=>{
-      println("staff=> %s".format(msg))
-      val menuChoice: String = random.shuffle(orderPref.toList).head
-      from ! TopMenuOrderPref("I would like to have %s today".format(menuChoice),self)
+    case OrderPreference=>{
+      val topChoice: String = OrderPreference().getRandom
+      println("%s I would like to have %s today".format(self.path.name, topChoice))
+      sender ! TopMenuOrderPref(topChoice)
     }
-  }
+
+    case WaitForYourTurnPlease(sender) =>{
+      for(x<-Range(0,3)){
+        Thread.sleep(1000)
+        println("%s Doing some random stuff".format(self.path.name))
+      }
+    }
+
+    case DrinkRequest(options,sizes) =>{
+      util.Random.shuffle(drinkPref).head match{
+        case true => {
+          Thread.sleep(1000)
+          val drink: String = util.Random.shuffle(options).head
+          val size:String = util.Random.shuffle(sizes).head
+          println("I would like to have a %s %s".format(sizes,drink))
+          sender ! DrinkResponse(drink,size)
+        }
+        case false => {
+          println("%s => No Thanks I done for today! bill please".format(self.path.name))
+          sender!DrinkResponse("","") // no drink required
+        }
+      }
+    }
+    
+    case BillingRequest(amount,paymentType)=>{
+      val paymentMode: String = util.Random.shuffle(paymentType).head
+      println("%s=> I will pay the amount by %s by %s".format(amount,paymentMode))
+      sender! BillingResponse(amount,paymentMode)
+    }
+
+    case ChooseBread(options)=>{
+      val bread: String = ChooseBread(options).makeBreadChoice()
+      val breadSize: String = ChooseBread(options).makeSizeChoice()
+      println("%s I would like to have %s bread with size %s".format(self.path.name,bread,breadSize))
+      sender ! BreadChoice(bread,breadSize)
+    }  
+  } //receive ends
 }
 
 object SubwaySimulator {
   def main(args:Array[String]): Unit = {
-   val system: ActorSystem = ActorSystem("SimulationActors")
-   val staff: ActorRef = system.actorOf(Props[Staff],"FrontDeskStaff")
-   val customer:ActorRef = system.actorOf(Props[Customer],"Customer1")
-   staff ! "Subway is open for business"
+    // actor system for the store initialized
+    val system: ActorSystem = ActorSystem("SimulationActors")
+
+    println("***** Starting Subway Simulation ********* ")
+    println("Please enter the no of customers you would like to be in the store: ")
+    val staff: ActorRef = system.actorOf(Props[Staff],"FrontDeskStaff")
+
+    //read from stdin
+    val noOfCustomers: Int = (for(ln<-io.Source.stdin.getLines()) yield ln).toSeq.head.toInt
+    for(x<-Range(0,noOfCustomers)){
+      system.actorOf(Props[Customer],"Customer%s".format(x))
+    }
+
+    import concurrent.duration._
+    system.scheduler.scheduleOnce(2.seconds,staff,"Subway is open for business")(system.dispatcher,Actor.noSender)
   }
 }
 
