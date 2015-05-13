@@ -79,8 +79,7 @@ class Staff extends Actor{
         }
         case false => { //salad
            println("Here's your Salad sir, would you like to have a drink?")
-           Thread.sleep(1500)
-           sender ! DrinkRequest
+           sender() ! DrinkRequest()
         }
       }
     }
@@ -133,9 +132,10 @@ class Customer extends Actor{
       from!CustomerEntersForPlacingOrder("%s -> Hello how are you today!".format(self.path.name),self)
     }
 
-    case OrderPreference=>{
-      val topChoice: String = OrderPreference().getRandom
+    case OrderPreference(pref)=>{
+      val topChoice: String = OrderPreference(pref).getRandom
       println("%s I would like to have %s today".format(self.path.name, topChoice))
+      Thread.sleep(2000)
       sender ! TopMenuOrderPref(topChoice)
     }
 
@@ -152,7 +152,7 @@ class Customer extends Actor{
           Thread.sleep(1000)
           val drink: String = util.Random.shuffle(options).head
           val size:String = util.Random.shuffle(sizes).head
-          println("I would like to have a %s %s".format(sizes,drink))
+          println("I would like to have a %s %s".format(size,drink))
           sender ! DrinkResponse(drink,size)
         }
         case false => {
@@ -164,7 +164,7 @@ class Customer extends Actor{
     
     case BillingRequest(amount,paymentType)=>{
       val paymentMode: String = util.Random.shuffle(paymentType).head
-      println("%s=> I will pay the amount by %s by %s".format(amount,paymentMode))
+      println("%s=> I will pay the amount by %s by %s".format(self.path.name,amount,paymentMode))
       sender! BillingResponse(amount,paymentMode)
     }
 
