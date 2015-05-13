@@ -75,7 +75,6 @@ class Staff extends Actor{
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
     stream.subscribe(self,classOf[ExitRestaurant])
-    stream.subscribe(self,classOf[CustomerEntersForPlacingOrder])
   }
 
   override def receive: Receive = {
@@ -86,8 +85,11 @@ class Staff extends Actor{
     case CustomerEntersForPlacingOrder(msg,from)=> {
      currentCustomer match{
        case customer:ActorRef => {
-         queue.enqueue(from)
-         from ! WaitForYourTurnPlease(self)
+         if(!queue.contains(from)){
+           queue.enqueue(from)
+           stream.publish(CustomerEntersForPlacingOrder(msg,from))
+           from ! WaitForYourTurnPlease(self)
+         }
        }
        case _ => { // Dont have any current Customer I will take your order
 
@@ -99,7 +101,7 @@ class Staff extends Actor{
      }
 
     case TopMenuOrderPref(topMenu)=>{
-      println("Staff=> ok lets build %s for you".format(topMenu))
+      println("Staff=>%s ok lets build %s for you".format(sender().path.name,topMenu))
       TopMenuOrderPref(topMenu).isSub match {
         case true =>{ //sub
           Thread.sleep(1000)
@@ -107,8 +109,9 @@ class Staff extends Actor{
           sender() ! ChooseBread()
         }
         case false => { //salad
-           println("Staff=>%s Here's your Salad sir, would you like to have a drink?".format(sender().path.name))
-           println("Staff=> Your Drink options are %s and sizes are %s",DrinkRequest().options,DrinkRequest().size)
+          val customerName: String = sender().path.name
+          println("Staff=>%s Here's your Salad sir, would you like to have a drink?".format(customerName))
+           println("Staff=>%s Your Drink options are %s with sizes %s".format(customerName,DrinkRequest().options.foldLeft("")((x,y)=>x+","+y).toString,DrinkRequest().size.foldLeft("")((x,y)=>x+","+y).toString))
            sender() ! DrinkRequest()
         }
       }
@@ -117,22 +120,22 @@ class Staff extends Actor{
     case DrinkResponse(drinkType,drinkSize) =>{
       DrinkResponse(drinkType,drinkSize).isRequested match {
         case true => {
-          println("Staff=> Here is your  %s cup for a drink".format(drinkSize,sender().path.name))
+          println("Staff=>%s Here is your  %s cup for a drink".format(sender().path.name,drinkSize))
           val billAmount: Float = (2.00 + 6.50).toFloat
           sender!BillingRequest(amount =billAmount)
-          println("Staff=> %s the bill would be %s".format(sender().path.name,billAmount))
+          println("Staff=> %s the bill would be %s USD".format(sender().path.name,billAmount))
         }
         case false =>{
           val billAmount: Float = 6.50.toFloat
           sender!BillingRequest(amount = billAmount)
-          println("Staff=> %s the bill would be %s".format(billAmount,sender().path.name))
+          println("Staff=> %s the bill would be %s USD".format(sender().path.name,billAmount))
         }
       }
     }
 
     case BillingResponse(amount,paymentMode)=>{
-      println("Staff=> We have charged you %s by payment mode %s".format(amount,paymentMode))
-      println("Staff=> Thank you for your business have a great day!")
+      println("Staff => %s We have charged you %s by payment mode %s".format(sender.path.name,amount,paymentMode))
+      println("Staff => %s Thank you for your business have a great day!".format(sender().path.name))
       currentCustomer = null
       queue.isEmpty match {
         case false => {
@@ -144,18 +147,19 @@ class Staff extends Actor{
     }
 
     case BreadChoice(bread,size)=>{
-      println("Staff=> Ok.. i will get you a %s with size %s".format(bread,size))
-      //println("Staff=> What flavour would you like..You can have %s ".format(FlavourRequest().options))
-      println("Staff=> What flavour would you like..You can have any of these..")
+      println("Staff=> %s Ok.. i will get you a %s with size %s".format(sender().path.name,bread,size))
+      println("Staff=> %s What flavour would you like..You can have any of these..".format(sender().path.name))
       printList(FlavourRequest().options)
+      Thread.sleep(2000)
       sender() ! FlavourRequest()
     }
 
    // received flavour now ask for sauce
     case FlavourResponse(flavour)=>{
-      println("Staff=> sure! I will get you  %s".format(flavour))
-      println("Staff=> What sauce would you like..You can have any of these..")
+      println("Staff=>%s  sure! I will get you  %s".format(sender().path.name,flavour))
+      println("Staff=>%s What sauce would you like..You can have any of these..".format(sender().path.name))
       printList(SauceRequest().options)
+      Thread.sleep(3000)
       sender() ! SauceRequest()
     }
 
@@ -168,8 +172,8 @@ class Staff extends Actor{
 
 // received sauce preference. Now ask for a drink
   case SauceResponse(sauce1,sauce2)=>{
-    println("Staff=> sure! I will get you %s and %s".format(sauce1,sauce2))
-    println("Staff=> Would you like to have any drink? you can go for")
+    println("Staff=>%s sure! I will get you %s and %s".format(sender().path.name,sauce1,sauce2))
+    println("Staff=>%s Would you like to have any drink? you can go for".format(sender().path.name))
     printList(DrinkRequest().options)
     println("Staff=> for sizes ")
     printList(DrinkRequest().size)
@@ -190,7 +194,6 @@ class Customer extends Actor{
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
-    println("%s Entered".format(self.path.name))
     stream.subscribe(self,classOf[OpenForBusiness])
   }
 
@@ -201,9 +204,9 @@ class Customer extends Actor{
 
     case OrderPreference(pref)=>{
       val topChoice: String = OrderPreference(pref).getRandom
-    println("%s I would like to have %s today".format(self.path.name, "Sub"))
-      Thread.sleep(2000)
-      sender ! TopMenuOrderPref("Sub")
+      println("%s I would like to have %s today".format(self.path.name, topChoice))
+      Thread.sleep(3000)
+      sender ! TopMenuOrderPref(topChoice)
     }
 
     case WaitForYourTurnPlease(sender) =>{
@@ -213,7 +216,7 @@ class Customer extends Actor{
 
       loop.breakable{
         for(x<-Range(0,7)){
-          Thread.sleep(1500)
+          Thread.sleep(2500)
           val message = util.Random.shuffle(customerMessages).head
           if(!message.equals(ExitRestaurant(self))){
             stream.publish(message)
@@ -231,11 +234,11 @@ class Customer extends Actor{
           Thread.sleep(1000)
           val drink: String = util.Random.shuffle(options).head
           val size:String = util.Random.shuffle(sizes).head
-          println("I would like to have a %s %s".format(size,drink))
+          println("%s=> I would like to have a %s %s".format(self.path.name,size,drink))
           sender ! DrinkResponse(drink,size)
         }
         case false => {
-          println("%s => No Thanks I done for today! bill please".format(self.path.name))
+          println("%s => No Thanks I am done for today! bill please".format(self.path.name))
           sender!DrinkResponse("","") // no drink required
         }
       }
@@ -286,18 +289,22 @@ class Observer extends Actor{
 
   override def receive: Actor.Receive = {
     case ExitRestaurant(customer)=>{
+      Thread.sleep(1500)
       println("Observer => %s exited the restaurant ".format(customer.path.name))
     }
 
     case TakeACall(customer)=>{
+      Thread.sleep(1500)
       println("Observer=> %s is taking a call".format(customer.path.name))
     }
 
     case MakeACall(customer)=>{
+      Thread.sleep(1500)
       println("Observer=> %s is making a call".format(customer.path.name))
     }
 
     case ScanMenu(customer)=>{
+      Thread.sleep(1500)
       println("Observer=> %s is Scanning the menu".format(customer.path.name))
       for(x<-Range(1,4)){
         Thread.sleep(800)
@@ -305,8 +312,9 @@ class Observer extends Actor{
       }
     }
 
-    case CustomerEntersForPlacingOrder(msg,from)=>{
-      println("Observer=> %s entered the Subway restaurant premises".format(from.path.name))
+    case CustomerEntersForPlacingOrder(msg,customer)=>{
+      Thread.sleep(1500)
+      println("Observer=> %s entered the Subway restaurant premises".format(customer.path.name))
     }
   }
 }
