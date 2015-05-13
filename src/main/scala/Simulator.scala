@@ -224,15 +224,15 @@ class Observer extends Actor{
     }
 
     case TakeACall(customer)=>{
-      println("Observer=> %s looks like is taking a call".format(customer.path.name))
+      println("Observer=> %s is taking a call".format(customer.path.name))
     }
 
     case MakeACall(customer)=>{
-      println("Observer=> %s looks like is making a call".format(customer.path.name))
+      println("Observer=> %s is making a call".format(customer.path.name))
     }
 
     case ScanMenu(customer)=>{
-      println("Observer=> %s looks is Scanning a menu".format(customer.path.name))
+      println("Observer=> %s is Scanning the menu".format(customer.path.name))
       for(x<-Range(1,4)){
         Thread.sleep(800)
         println(".........................................")
