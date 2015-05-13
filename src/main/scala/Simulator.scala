@@ -67,9 +67,9 @@ class Staff extends Actor{
 
 // print the list
   def printList(args: Seq[_]): Unit = {
-val newBuilder=new StringBuilder()
+  val newBuilder=new StringBuilder()
   args.foreach(el=>{newBuilder.append(el+",")})
-  println(newBuilder.toString())
+  print(newBuilder.toString()+"\n")
   }
 
   @throws[Exception](classOf[Exception])
@@ -162,7 +162,7 @@ val newBuilder=new StringBuilder()
 
     case ExitRestaurant(from)=>{
       val name: String = from.path.name
-      println(queue.dequeueFirst(_.path.name.equals(name)))
+      queue.dequeueFirst(_.path.name.equals(name))
     }
 
 
