@@ -150,6 +150,7 @@ class Staff extends Actor{
       println("Staff=> %s Ok.. i will get you a %s with size %s".format(sender().path.name,bread,size))
       println("Staff=> %s What flavour would you like..You can have any of these..".format(sender().path.name))
       printList(FlavourRequest().options)
+      // we are using sleep statements so that it looks like a real time conversation.
       Thread.sleep(2000)
       sender() ! FlavourRequest()
     }
@@ -205,6 +206,7 @@ class Customer extends Actor{
     case OrderPreference(pref)=>{
       val topChoice: String = OrderPreference(pref).getRandom
       println("%s I would like to have %s today".format(self.path.name, topChoice))
+      // we are using sleep statements so that it looks like a real time conversation.
       Thread.sleep(3000)
       sender ! TopMenuOrderPref(topChoice)
     }
